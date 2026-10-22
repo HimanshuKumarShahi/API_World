@@ -18,7 +18,7 @@ services:
           memory: 256M    
 
   mongo:
-    image: mongo:6.0
+    image: mongo:latest
     container_name: api_world_mongoDB
     ports:
       - "27017:27017"
