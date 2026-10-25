@@ -1,35 +1,68 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: fastapi_auth_postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: fastapi_auth_pgadmin
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - backend_network
+
   api:
-    build: .
-    container_name: api_world_backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi_auth_backend
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/app
     ports:
       - "8000:8000"
     env_file:
       - .env
     depends_on:
-      - mongo
-    volumes:
-      - .:/app  
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'     
-          memory: 256M    
-
-  mongo:
-    image: mongo:latest
-    container_name: api_world_mongoDB
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    command: ["--wiredTigerCacheSizeGB", "0.25"]
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M     
+      db:
+        condition: service_healthy
+    networks:
+      - backend_network
 
 volumes:
-  mongo_data:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  backend_network:
+    driver: bridge
