@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
+RESERVED_USERNAMES = {"profile", "me", "admin", "auth", "login", "register", "logout", "settings", "root"}
 
 class RegisterRequest(BaseModel):
     username: str = Field(
@@ -12,6 +13,13 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     full_name: str | None = Field(None, max_length=100)
+
+    @field_validator("username")
+    @classmethod
+    def prevent_reserved_usernames(cls, v: str) -> str:
+        if v.lower() in RESERVED_USERNAMES:
+            raise ValueError(f"Username '{v}' is reserved and cannot be used.")
+        return v.lower()
 
 
 class LoginRequest(BaseModel):
