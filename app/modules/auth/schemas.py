@@ -52,3 +52,4 @@ class ResetPasswordRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+    dev_token: str | None = None
