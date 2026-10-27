@@ -112,7 +112,20 @@ cd API_World
 ```
 ## Build and start the containers:
 ```
-docker compose up --build -d
+Run containers in background (detached mode)
+
+docker compose up -d --build
+
+View live FastAPI logs (to copy email verification/reset tokens)
+
+docker logs -f fastapi_auth_backend
+
+Stop containers
+docker compose down
+
+Stop containers and wipe database volumes (fresh start)
+
+docker compose down -v
 ```
 ## Access the Application:
 
