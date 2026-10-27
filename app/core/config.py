@@ -1,3 +1,4 @@
+from typing import Optional, Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,13 +20,22 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 5
     EMAIL_TOKEN_EXPIRE_MINUTES: int = 20
 
-    # Email / SMTP
-    SMTP_HOST: str
+
+    # Open-Source Auth Feature Flags
+
+    REQUIRE_EMAIL_VERIFICATION: bool = False
+
+    EMAIL_PROVIDER: Literal["console", "mailtrap", "smtp"] = "console"
+
+    # Optional Email / SMTP -> Won't crash if left empty
+
+    SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
-    SMTP_USER: str
-    SMTP_PASSWORD: str
-    EMAILS_FROM_EMAIL: str
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    EMAILS_FROM_EMAIL: str = "APIWorld.auth@gmail.com"
     EMAILS_FROM_NAME: str = "Auth System"
+    
 
     model_config = SettingsConfigDict(
         env_file=".env",
