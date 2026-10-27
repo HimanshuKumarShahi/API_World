@@ -307,3 +307,21 @@ passlib[argon2]>=1.7.4
 python-multipart>=0.0.12
 fastapi-mail>=1.4.1
 ```
+
+# 🎭 PDR: Jokes Module (`app/modules/jokes`) — API_World
+
+## 1. Module Overview
+The **Jokes Module** serves two purposes inside `API_World`:
+1. **Zero-Auth Public Playground (Frontend Practice):** Anyone can fetch a random joke, browse paginated jokes, filter by category (`programming`, `dad_joke`, `pun`, `dark`, `one_liner`), or search by keyword without needing an access token.
+2. **Authenticated Community Interaction (Full-Stack Practice):** Logged-in users (`Depends(get_current_user)`) can submit their own jokes, update/delete jokes they authored, and toggle **Like / Dislike** reactions on any joke.
+
+---
+
+## 2. Module Directory Structure
+```text
+app/modules/jokes/
+├── __init__.py
+├── models.py          # SQLAlchemy tables: Joke & JokeReaction
+├── schemas.py         # Pydantic v2 schemas (Pagination, Create, Update, Response)
+├── controller.py      # Business logic, random SQL selector, reaction toggler & DB seeder
+└── router.py          # /api/v1/jokes HTTP endpoints
