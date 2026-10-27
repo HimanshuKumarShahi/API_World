@@ -35,7 +35,28 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     EMAILS_FROM_EMAIL: str = "APIWorld.auth@gmail.com"
     EMAILS_FROM_NAME: str = "Auth System"
-    
+
+
+    ENABLED_MODULES: str = "all"
+
+    @property
+    def active_modules_list(self) -> list[str]:
+        ALL_AVAILABLE = ["auth", "users", "jokes", "banking", "lms", "todos"]
+        if self.ENABLED_MODULES.strip().lower() == "all":
+            return ALL_AVAILABLE
+        
+        requested = [
+            m.strip().lower() 
+            for m in self.ENABLED_MODULES.split(",") 
+            if m.strip()
+            ]
+        seen = set()
+        ordered = []
+        for m in requested:
+            if m in ALL_AVAILABLE and m not in seen:
+                seen.add(m)
+                ordered.append(m)
+        return ordered
 
     model_config = SettingsConfigDict(
         env_file=".env",
