@@ -34,7 +34,7 @@ class AuthController:
         background_tasks: BackgroundTasks,
         db: AsyncSession,
     ) -> dict:
-        #  Check if email or username already exists
+        # Check if email or username already exists
         stmt = select(User).where(
             or_(
                 User.email == data.email.lower(),
@@ -55,29 +55,41 @@ class AuthController:
                 detail="Username is already taken",
             )
 
-        #  Create new user with hashed password
+        auto_verify = not settings.REQUIRE_EMAIL_VERIFICATION
+
         new_user = User(
             username=data.username.lower(),
             email=data.email.lower(),
             hashed_password=get_password_hash(data.password),
             full_name=data.full_name,
-            is_verified=False,
+            is_verified=auto_verify,
             is_active=True,
         )
         db.add(new_user)
         await db.commit()
         await db.refresh(new_user)
 
-        #  Generate email verification token & dispatch email in background
+        # If email verification is disabled, let them log in immediately
+
+        if not settings.REQUIRE_EMAIL_VERIFICATION:
+            return {
+                "message": "Registration successful! Email verification is disabled, so you can log in immediately."
+            }
+
         verify_token = create_email_verification_token(subject=str(new_user.id))
         background_tasks.add_task(
             send_verification_email, new_user.email, verify_token
         )
 
-        return {
-            "message": "Registration successful. Please check your email (or console logs) to verify your account."
+        response = {
+            "message": "Registration successful. Please verify your email to continue."
         }
+        # Helpful for open-source users testing without Mailtrap
 
+        if settings.EMAIL_PROVIDER == "console":
+            response["dev_token"] = verify_token
+        return response
+    
     @staticmethod
     async def verify_email(token: str, db: AsyncSession) -> dict:
         user_id_str = decode_token(token, expected_type="verify_email")
@@ -109,6 +121,7 @@ class AuthController:
     @staticmethod
     async def login_user(data: LoginRequest, db: AsyncSession) -> TokenResponse:
         # Lookup user by email OR username
+
         identifier = data.email_or_username.lower()
         stmt = select(User).where(
             or_(User.email == identifier, User.username == identifier)
@@ -128,17 +141,17 @@ class AuthController:
                 detail="Account is deactivated",
             )
 
-        if not user.is_verified:
+        if settings.REQUIRE_EMAIL_VERIFICATION and not user.is_verified:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Please verify your email address before logging in",
             )
 
-        #  Generate Access & Refresh tokens
+        # Generate Access & Refresh tokens
         access_token = create_access_token(subject=str(user.id))
         refresh_token_str = create_refresh_token(subject=str(user.id))
 
-        #  Store Refresh Token in PostgreSQL for session tracking/revocation
+        # Store Refresh Token in PostgreSQL for session tracking/revocation
         db_refresh_token = RefreshToken(
             user_id=user.id,
             token=refresh_token_str,
@@ -152,7 +165,6 @@ class AuthController:
             access_token=access_token,
             refresh_token=refresh_token_str,
         )
-
 
     @staticmethod
     async def refresh_access_token(
@@ -181,7 +193,7 @@ class AuthController:
                 detail="Refresh token has been revoked or expired",
             )
 
-        # Rotate token: revoke old one and issue new pair
+        # revoke old one and issue new pair
         stored_token.is_revoked = True
         new_access = create_access_token(subject=user_id_str)
         new_refresh = create_refresh_token(subject=user_id_str)
@@ -197,8 +209,6 @@ class AuthController:
         await db.commit()
 
         return TokenResponse(access_token=new_access, refresh_token=new_refresh)
-
-
 
     @staticmethod
     async def logout_user(refresh_token: str, db: AsyncSession) -> dict:
@@ -220,16 +230,19 @@ class AuthController:
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
 
-        # Always return 200 OK even if email isn't found to prevent user enumeration
+        reset_token = None
         if user and user.is_active:
             reset_token = create_password_reset_token(subject=str(user.id))
             background_tasks.add_task(
                 send_reset_password_email, user.email, reset_token
             )
 
-        return {
+        response = {
             "message": "If that email is registered, a password reset link has been sent."
         }
+        if settings.EMAIL_PROVIDER == "console" and reset_token:
+            response["dev_token"] = reset_token
+        return response
 
 
     @staticmethod
