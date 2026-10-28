@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     EMAILS_FROM_EMAIL: str = "APIWorld.auth@gmail.com"
     EMAILS_FROM_NAME: str = "Auth System"
 
+    # jokes
+    JOKES_DEFAULT_COUNT: int = 1000
+
 
     ENABLED_MODULES: str = "all"
 
