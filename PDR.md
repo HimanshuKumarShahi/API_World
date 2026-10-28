@@ -308,20 +308,26 @@ python-multipart>=0.0.12
 fastapi-mail>=1.4.1
 ```
 
-# 🎭 PDR: Jokes Module (`app/modules/jokes`) — API_World
+# 🎭 PDR: Complete Jokes Module (`app/modules/jokes`) — API_World
 
-## 1. Module Overview
-The **Jokes Module** serves two purposes inside `API_World`:
-1. **Zero-Auth Public Playground (Frontend Practice):** Anyone can fetch a random joke, browse paginated jokes, filter by category (`programming`, `dad_joke`, `pun`, `dark`, `one_liner`), or search by keyword without needing an access token.
-2. **Authenticated Community Interaction (Full-Stack Practice):** Logged-in users (`Depends(get_current_user)`) can submit their own jokes, update/delete jokes they authored, and toggle **Like / Dislike** reactions on any joke.
+## 1. Executive Summary & Core Objectives
+The **Jokes Module** is a production-grade, high-performance REST API inside `API_World` designed for both **Zero-Auth Public Consumption** (Frontend/Mobile/Bot developers) and **Authenticated Community Contributions**.
+
+### Key Engineering Challenges Solved:
+1. **Taste, Vibe & Age-Rating System:** Supports granular filtering by **Category/Taste** (`funny`, `dark`, `adult`, `programming`, `dad_joke`, `pun`, `savage`, `one_liner`) and **Content Flags** (`is_nsfw`, `is_adult`, `is_dark`, `safe_mode`).
+2. **Dual-ID Lookup (`seq_id` + `UUID`):** Users love clean numeric IDs like `GET /api/v1/jokes/42` (like FreeAPI / JokeAPI), while relational databases love `UUID`. Our schema provides **both**: an auto-incrementing `seq_id` (`1, 2, 3...2000`) AND a `UUID`, allowing `/api/v1/jokes/{identifier}` to accept either!
+3. **Handling Massive Queries (`limit=2000` Jokes):**
+   - Standard APIs cap pagination at 100 items, frustrating developers who want a bulk dataset of 1,000–2,000 jokes for ML training, offline caching, or stress-testing frontend virtualized lists.
+   - Our engine supports **Bulk Seeding (up to 2,500+ jokes)** via a Combinatorial & Curated Dataset Generator, and supports fetching up to `limit=2000` in a single request using indexed cursor/offset pagination and lightweight projection.
 
 ---
 
-## 2. Module Directory Structure
+## 2. Module Folder Structure
 ```text
 app/modules/jokes/
 ├── __init__.py
-├── models.py          # SQLAlchemy tables: Joke & JokeReaction
-├── schemas.py         # Pydantic v2 schemas (Pagination, Create, Update, Response)
-├── controller.py      # Business logic, random SQL selector, reaction toggler & DB seeder
+├── models.py          # SQLAlchemy tables: Joke & JokeReaction (with composite indexes)
+├── schemas.py         # Pydantic v2 schemas: Taste/Category Enums, Filters, Bulk & Paginated responses
+├── seed_data.py       # Curated bank + Bulk Generator (can seed 50 to 2,500+ categorized jokes instantly)
+├── controller.py      # Business logic: Random sampling, 2000-row streaming, Dual-ID lookup, Likes/Dislikes
 └── router.py          # /api/v1/jokes HTTP endpoints
