@@ -18,10 +18,11 @@ def load_enabled_modules(app: FastAPI) -> list[str]:
     mounted_modules: list[str] = []
     logger.info(f"🚀 Configured Active Modules: {active_modules}")
 
-    # Always register the core User model metadata so ForeignKeys (user_id)
-    # in auth, banking, or jokes never fail, WITHOUT mounting the users router!
-
+    # ---> FIXED HERE: Always register BOTH User and RefreshToken models <---
+    # Because User has a relationship("RefreshToken"), both model files must be
+    # registered in SQLAlchemy Base, even when their routers aren't mounted!
     importlib.import_module("app.modules.users.models")
+    importlib.import_module("app.modules.auth.models")
 
     for module_name in active_modules:
         try:
@@ -44,6 +45,11 @@ def load_enabled_modules(app: FastAPI) -> list[str]:
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    if "jokes" in MOUNTED_MODULES:
+        from app.modules.jokes.seed_loader import sync_jokes_json_to_db_and_cache
+        await sync_jokes_json_to_db_and_cache(target_count=500)
+
     yield
     await engine.dispose()
 
@@ -74,5 +80,14 @@ async def health_check():
         "project": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "configured_modules": settings.active_modules_list,
+        "mounted_modules": MOUNTED_MODULES,
+    }
+
+@app.get("/", tags=["Root"])
+async def root():
+    return {
+        "message": f"Welcome to {settings.PROJECT_NAME}",
+        "docs_url": "/docs",
+        "health_url": "/health",
         "mounted_modules": MOUNTED_MODULES,
     }
