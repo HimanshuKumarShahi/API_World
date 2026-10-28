@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.core.config import settings
 from app.core.database import engine, Base
@@ -48,7 +49,7 @@ async def lifespan(app: FastAPI):
 
     if "jokes" in MOUNTED_MODULES:
         from app.modules.jokes.seed_loader import sync_jokes_json_to_db_and_cache
-        await sync_jokes_json_to_db_and_cache(target_count=500)
+        await sync_jokes_json_to_db_and_cache(target_count=settings.JOKES_DEFAULT_COUNT)
 
     yield
     await engine.dispose()
@@ -60,7 +61,14 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
+    swagger_ui_parameters={
+        "syntaxHighlight": False,
+        "docExpansion": "list",
+        "defaultModelsExpandDepth": -1,
+    },
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
