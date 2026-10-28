@@ -29,7 +29,7 @@ class JokesController:
         is_adult: Optional[bool] = None,
         search: Optional[str] = None,
     ) -> list[dict]:
-        """0.1ms in-memory filtering with smart Swagger boolean handling."""
+        """in-memory filtering with smart Swagger boolean handling."""
         if category and "," not in category:
             cat_clean = category.strip().lower()
             pool = cache.JOKES_BY_CATEGORY.get(cat_clean, [])
@@ -59,7 +59,6 @@ class JokesController:
             if is_adult is False:
                 pool = [j for j in pool if j["is_adult"] is False]
 
-       
         if search and search.strip():
             q = search.strip().lower()
             pool = [
@@ -80,7 +79,7 @@ class JokesController:
         search: Optional[str],
         page: int,
         limit: int,
-    ) -> PaginatedJokesResponse:
+    ) -> dict:  
         await JokesController.ensure_loaded()
         filtered = JokesController._filter_ram_jokes(
             category, joke_type, safe_mode, is_dark, is_adult, search
@@ -90,14 +89,14 @@ class JokesController:
         end = start + limit
         sliced = filtered[start:end]
 
-        return PaginatedJokesResponse(
-            total_available=total,
-            returned_count=len(sliced),
-            page=page,
-            limit=limit,
-            execution_mode="RAM_CACHE_0.1MS + POSTGRES_BACKED",
-            items=sliced,
-        )
+        return {
+            "total_available": total,
+            "returned_count": len(sliced),
+            "page": page,
+            "limit": limit,
+            "execution_mode": "RAM_CACHE + POSTGRES_BACKED",
+            "items": sliced,
+        }
 
     @staticmethod
     async def get_random_jokes(
