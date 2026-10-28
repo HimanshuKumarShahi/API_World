@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.responses import JSONResponse
 
 from app.core.database import get_db
 from app.modules.jokes.schemas import (
@@ -17,12 +18,12 @@ router = APIRouter(prefix="/jokes", tags=["Jokes API"])
 @router.get(
     "",
     response_model=PaginatedJokesResponse,
-    summary="Get jokes with taste filters & bulk limit (up to 2,000 jokes in 0.1ms)",
+    summary="Get jokes with taste filters & pagination (Limit up to 1,000)",
 )
 async def list_jokes(
     category: Optional[str] = Query(
         None,
-        description="Filter by taste: funny, dark, adult, programming, dad_joke, pun, savage (comma-separated allowed)",
+        description="Filter by taste: funny, dark, adult, programming, dad_joke, pun, savage",
     ),
     joke_type: Optional[str] = Query(None, description="single or twopart"),
     safe_mode: Optional[bool] = Query(
@@ -32,12 +33,17 @@ async def list_jokes(
     is_adult: Optional[bool] = Query(None, description="Filter specifically for 18+ adult jokes"),
     search: Optional[str] = Query(None, description="Search keyword in setup or punchline"),
     page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(20, ge=1, le=2000, description="Number of jokes to return (Max 2000)"),
+    limit: int = Query(
+        20,
+        ge=1,
+        le=1000,
+        description="Jokes per page (Max 1000. Tip: Use limit <= 100 in Swagger UI to keep UI snappy)",
+    ),
 ):
-    return await JokesController.list_jokes(
+    data = await JokesController.list_jokes(
         category, joke_type, safe_mode, is_dark, is_adult, search, page, limit
     )
-
+    return JSONResponse(content=data)
 
 @router.get(
     "/random",
