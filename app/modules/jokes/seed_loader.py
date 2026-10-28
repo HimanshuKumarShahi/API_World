@@ -5,6 +5,7 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.dialects.postgresql import insert
 from app.core.database import AsyncSessionLocal,settings
 from app.modules.jokes.models import Joke
+from sqlalchemy import text
 
 logger = logging.getLogger("uvicorn")
 
@@ -108,14 +109,20 @@ async def sync_jokes_json_to_db_and_cache(target_count: int | None = None) -> in
         existing_count = count_res.scalar_one()
 
         if existing_count < len(json_jokes):
-            logger.info(f" Syncing {len(json_jokes)} jokes into PostgreSQL...")
+            logger.info(f"⚡ Syncing {len(json_jokes)} jokes into PostgreSQL...")
             batch_size = 250
             for start in range(0, len(json_jokes), batch_size):
                 chunk = json_jokes[start : start + batch_size]
                 stmt = insert(Joke).values(chunk).on_conflict_do_nothing(index_elements=["id"])
                 await db.execute(stmt)
             await db.commit()
-            logger.info(" PostgreSQL successfully synced with jokes.json!")
+            
+            await db.execute(
+                text("SELECT setval(pg_get_serial_sequence('jokes', 'id'), COALESCE(MAX(id), 1)) FROM jokes;")
+            )
+            await db.commit()
+            
+            logger.info("✅ PostgreSQL successfully synced with jokes.json & sequence reset!")
 
         result = await db.execute(select(Joke).order_by(Joke.id.asc()))
         db_rows = result.scalars().all()
