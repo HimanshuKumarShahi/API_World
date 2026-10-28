@@ -1,9 +1,9 @@
 import json
 import logging
 from pathlib import Path
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.dialects.postgresql import insert
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal,settings
 from app.modules.jokes.models import Joke
 
 logger = logging.getLogger("uvicorn")
@@ -43,19 +43,18 @@ BASE_JOKES = [
 ]
 
 
-def ensure_jokes_json_exists(target_count: int = 500) -> list[dict]:
-    """Generates 500 structured jokes into jokes.json safely with JSON validation."""
+def ensure_jokes_json_exists(target_count: int = 1000) -> list[dict]:
+    """Ensures jokes.json has exactly `target_count` jokes (e.g., 1,000)."""
     DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     if DATA_FILE.exists():
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if isinstance(data, list) and len(data) > 0:
+                if isinstance(data, list) and len(data) == target_count:
                     return data
         except Exception:
-            logger.warning("⚠️ jokes.json was empty or corrupt. Regenerating fresh file...")
-
+            logger.warning("⚠️ jokes.json was empty or corrupt. Regenerating...")
 
     generated = []
     for i in range(1, target_count + 1):
@@ -80,7 +79,7 @@ def ensure_jokes_json_exists(target_count: int = 500) -> list[dict]:
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(generated, f, indent=2, ensure_ascii=False)
 
-    logger.info(f"📁 Generated {DATA_FILE} with {len(generated)} structured jokes.")
+    logger.info(f"📁 Updated {DATA_FILE} with {len(generated)} structured jokes.")
     return generated
 
 
@@ -94,22 +93,29 @@ def rebuild_ram_cache(jokes_list: list[dict]) -> None:
         JOKES_BY_CATEGORY.setdefault(cat, []).append(j)
 
 
-async def sync_jokes_json_to_db_and_cache(target_count: int = 500) -> int:
+async def sync_jokes_json_to_db_and_cache(target_count: int | None = None) -> int:
+    if target_count is None:
+        target_count = settings.JOKES_DEFAULT_COUNT
+
     json_jokes = ensure_jokes_json_exists(target_count=target_count)
 
     async with AsyncSessionLocal() as db:
+        
+        await db.execute(delete(Joke).where(Joke.id > target_count))
+        await db.commit()
+
         count_res = await db.execute(select(func.count(Joke.id)))
         existing_count = count_res.scalar_one()
 
         if existing_count < len(json_jokes):
-            logger.info(f"⚡ Syncing {len(json_jokes)} jokes into PostgreSQL...")
+            logger.info(f" Syncing {len(json_jokes)} jokes into PostgreSQL...")
             batch_size = 250
             for start in range(0, len(json_jokes), batch_size):
                 chunk = json_jokes[start : start + batch_size]
                 stmt = insert(Joke).values(chunk).on_conflict_do_nothing(index_elements=["id"])
                 await db.execute(stmt)
             await db.commit()
-            logger.info("✅ PostgreSQL successfully synced with jokes.json!")
+            logger.info(" PostgreSQL successfully synced with jokes.json!")
 
         result = await db.execute(select(Joke).order_by(Joke.id.asc()))
         db_rows = result.scalars().all()
@@ -129,5 +135,5 @@ async def sync_jokes_json_to_db_and_cache(target_count: int = 500) -> int:
             for r in db_rows
         ]
         rebuild_ram_cache(ram_data)
-        logger.info(f"🚀 Jokes RAM Cache ready: {len(JOKES_RAM_LIST)} jokes indexed in 0.1ms!")
+        logger.info(f" Jokes RAM Cache ready: {len(JOKES_RAM_LIST)} jokes indexed in 0.1ms!")
         return len(JOKES_RAM_LIST)
